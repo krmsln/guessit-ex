@@ -5,12 +5,16 @@
 // ===========================================================================
 
 // The port the application listens on.
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // The URL used to connect to the PostgreSQL database. It has the shape
 // postgresql://USER:PASSWORD@HOST:PORT/DATABASE. Change the password to match
 // the one you set when you ran schema.sql.
+<<<<<<< HEAD
 const DATABASE_URL = 'postgresql://guessit:change-me-now@localhost:5434/guessit';
+=======
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://guessit@localhost:5432/guessit';
+>>>>>>> 15d90a2c3835e749aa7e2556902c481f1f493ffe
 
 // The colour used for the page's accent (buttons, title). Change it if you
 // like a different look.
@@ -34,6 +38,8 @@ const MAX_GAMES = 1000;
 const crypto = require('node:crypto');
 const express = require('express');
 const { Pool } = require('pg');
+const Mustache = require('mustache');
+const esc = (s) => Mustache.render('{{s}}', { s });
 
 const db = new Pool({ connectionString: DATABASE_URL });
 
@@ -79,8 +85,7 @@ app.get('/', async (req, res, next) => {
     // Select the games that have been won (found_at is not null), best first:
     // the fewest attempts first, and among games with the same number of
     // attempts, the one found earliest first. Return only the top ten.
-    const leaderboardQuery =
-      'SELECT * FROM game WHERE found_at IS NOT NULL ORDER BY attempts ASC, found_at ASC LIMIT 10';
+    const leaderboardQuery = 'SELECT name, attempts, found_at FROM game WHERE found_at IS NOT NULL ORDER BY attempts ASC, found_at ASC LIMIT 10';
 
     // If the leaderboard cannot be loaded, for example because the database is
     // not running, the page is shown anyway and the error is printed in the
@@ -119,7 +124,8 @@ app.post('/games', async (req, res, next) => {
 
     // Insert the new game.
     await db.query(
-      `INSERT INTO game (id, name, secret, attempts, created_at) VALUES ('${id}', '${name}', ${secret}, 0, NOW())`
+      'INSERT INTO game (id, name, secret, attempts, created_at) VALUES ($1, $2, $3, 0, NOW())',
+      [id, name, secret]
     );
 
     // Keep only the MAX_GAMES most recent games, deleting the older ones.
@@ -175,7 +181,7 @@ app.post('/games/:id/guesses', async (req, res, next) => {
       // Add one to the game's attempts. When the guess equals the secret, also
       // set found_at to the current time (NOW()); otherwise leave found_at
       // unchanged. The game to update is `game` (its ID is `game.id`).
-      const updateQuery = `UPDATE game SET attempts = attempts + 1, found_at = CASE WHEN ${Number(guess)} = secret THEN NOW() ELSE found_at END WHERE id = '${game.id}'`;
+      const updateQuery = ''; // <-- IMPLEMENT ME
       await db.query(updateQuery);
     }
 
@@ -197,7 +203,7 @@ app.post('/games/:id/delete', async (req, res, next) => {
     // Give up.
     //
     // Delete `game` from the database (its ID is `game.id`).
-    const deleteQuery = `DELETE FROM game WHERE id = '${game.id}'`;
+    const deleteQuery = ''; // <-- IMPLEMENT ME
     await db.query(deleteQuery);
 
     res.redirect('/');
@@ -214,7 +220,7 @@ async function loadGame(id) {
   if (!/^[A-Za-z0-9]+$/.test(id)) {
     return null;
   }
-  const result = await db.query(`SELECT * FROM game WHERE id = '${id}' AND created_at > NOW() - INTERVAL '${GAME_TTL}'`);
+  const result = await db.query(`SELECT * FROM game WHERE id = $1 AND created_at > NOW() - INTERVAL '${GAME_TTL}'`, [id]);
   return result.rows[0] || null;
 }
 
@@ -287,7 +293,7 @@ function renderHome(leaderboard, totalGames, loaded) {
       const medal = rank <= 3 ? `<span class="rank-${rank}">●</span> ` : '';
       return `<li class="list-group-item d-flex justify-content-between align-items-center">
         <span class="rank fw-bold ${rank <= 3 ? 'rank-' + rank : ''}">${rank}</span>
-        <span class="flex-grow-1 ms-2">${medal}${game.name}</span>
+        <span class="flex-grow-1 ms-2">${medal}${esc(game.name)}</span>
         <span class="badge bg-light text-dark rounded-pill">${game.attempts} tries</span>
       </li>`;
     })
@@ -338,7 +344,7 @@ function renderGame(game, hint) {
   let banner = '';
   if (hint === 'won') {
     banner = `<div class="alert alert-success">
-        🎉 <strong>${game.name}</strong>, you found it in ${game.attempts} tries!
+        🎉 <strong>${esc(game.name)}</strong>, you found it in ${game.attempts} tries!
         <a href="/" class="alert-link">Back to the leaderboard</a>
       </div>`;
   } else if (hint === 'higher') {
@@ -372,7 +378,7 @@ function renderGame(game, hint) {
     `${banner}
     <div class="card">
       <div class="card-body">
-        <h1 class="h4 mb-1">Hello, ${game.name}!</h1>
+        <h1 class="h4 mb-1">Hello, ${esc(game.name)}!</h1>
         <p class="text-muted mb-4">I'm thinking of a number between 1 and 100. You've made ${game.attempts} guesses.</p>
         ${controls}
       </div>
